@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>ALICE</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+    <div id="messages"></div>
+
+    <form id="form">
+        <br>
+        <input type="radio" id="short" name="poll" value="short" checked>
+        <label for="poll"> Short</label>
+        <br>
+        <input type="radio" id="long" name="poll" value="long">
+        <label for="poll"> Long</label>
+        <br>
+        <input type="radio" id="ws" name="poll" value="ws">
+        <label for="poll"> WebSocket</label>
+        <br>
+        <input type="text" id="message" placeholder="Your message...">
+    </form>
+
+
+    <script>
+        let selected = "short";
+        let shortInterval;
+        let socket;
+
+        const short = document.getElementById("short");
+        const long = document.getElementById("long");
+        const ws = document.getElementById("ws");
+
+        // using event listener to listen for change event
+        short.addEventListener("change", (event) => {
+            selected = event.target.value;
+            console.log(`Selected: ${selected}`);
+            shortInterval = setInterval(checkUpdates, 3000);
+
+        });
+
+        long.addEventListener("change", (event) => {
+            selected = event.target.value;
+            console.log(`Selected: ${selected}`);
+            clearTimeout(shortInterval);
+            checkUpdatesLong();
+        });
+
+        ws.addEventListener("change", (event) => {
+            selected = event.target.value;
+            console.log(`Selected: ${selected}`);
+            clearTimeout(shortInterval);
+            socket = new WebSocket('ws://localhost:3001');
+
+            socket.onmessage = (event) => {
+                console.log(event);
+                showMessage(event.data);
+            }
+        });
+
+        function checkUpdates() {
+            console.log("started periodic check");
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', 'http://localhost:3000/updatePoll/a');
+            xhr.onload = function () {
+                if (this.status == 200) {
+                    console.log(this.response);
+                    showMessage(this.response);
+                    //document.getElementById('update').innerText = this.response;
+                }
+            };
+            xhr.send();
+        }
+        if (selected === "short")
+            shortInterval = setInterval(checkUpdates, 10000);
+
+        function checkUpdatesLong() {
+            console.log("started long poll");
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', 'http://localhost:3000/updatePollLong/a');
+
+            xhr.onload = function () {
+                if (this.status == 200) {
+                    console.log(this.response);
+                    showMessage(this.response);
+                }
+                else {
+                    console.log("drugo!");
+                }
+                if (selected === "long")
+                    checkUpdatesLong();
+            };
+            xhr.send();
+        }
+        if (selected === "long")
+            checkUpdatesLong();
+
+        const form = document.getElementById("form");
+        function showMessage(text, isMine = false) {
+            document.getElementById("messages").innerHTML += `
+            <div class="message-row ${isMine ? 'mine' : 'theirs'}">
+                <div class="bubble">${text}</div>
+            </div>
+          `;
+        }
+
+        form.addEventListener("submit", (event) => {
+            event.preventDefault();
+            const message = document.getElementById("message").value;
+
+            if (message === "") return;
+            // send message to server
+            if (selected === "ws") {
+                socket.send("a+" + message);
+                const input = document.getElementById('message');
+                input.value = '';
+                showMessage(message, true);
+            }
+
+            else {
+                fetch("http://localhost:3000/message/a", {
+                    method: "POST",
+                    body: JSON.stringify({ message }),
+                    headers: {
+                        "Content-Type": "application/json"
+                    }
+                })
+                    .then(response => {
+                        console.log("message sent", message);
+                        showMessage(message, true);
+                        const input = document.getElementById('message');
+                        input.value = '';
+                    })
+                    .catch(error => {
+                        console.error("Error:", error);
+                    });
+
+            }
+
+        });
+    </script>
+
+</body>
+
+</html>
